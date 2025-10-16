@@ -1,6 +1,8 @@
 Public repository of the interpreters I've implemented for [my esolangs](https://esolangs.com/wiki/User:Aadenboy). This does not include [Kawa](https://github.com/aadenboy/Kawa-IDE) nor [Smolder](https://github.com/aadenboy/smolder), which are their own experiences implemented in [LÖVE](https://love2d.org/).
 
 ## Trampolines
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*TODO: Remake the interpreter, it's been two years.*
+
 Use `Trampolines.lua` for a dedicated CLI experience, with a visual debugger. The program will ask for a file when it runs. Arguments are hard-baked in.
 
 Use `TrampolinesNoSTDIO.lua` for embedding. A visual debugger is not included. Pass the file and any additional arguments in order when running.
