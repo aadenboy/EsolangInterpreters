@@ -1,4 +1,4 @@
-Public repository of the interpreters I've implemented for [my esolangs](https://esolangs.com/wiki/User:Aadenboy). This does not include [Kawa](https://github.com/aadenboy/Kawa-IDE) nor [Smolder](https://github.com/aadenboy/smolder), which are their own experiences implemented in [LÖVE](https://love2d.org/).
+Public repository of the interpreters I've implemented for other esolangs, though mainly [my esolangs](https://esolangs.com/wiki/User:Aadenboy). This does not include [Kawa](https://github.com/aadenboy/Kawa-IDE) nor [Smolder](https://github.com/aadenboy/smolder), which are their own experiences implemented in [LÖVE](https://love2d.org/).
 
 ## Trampolines
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*TODO: Remake the interpreter, it's been two years.*
@@ -39,3 +39,6 @@ local flags = {
     maxoutbytes = math.huge,  -- maximum number of bytes to show in the output in debug mode
 }
 ```
+
+## Crypten
+`Crypten.lua` is a basic runner. It simply takes the program to run as the first argument.
