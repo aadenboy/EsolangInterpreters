@@ -111,7 +111,7 @@ code = code
     labels[l] = labels[l] or count
     return "n"..labels[l]
   end)
-  --:gsub("%s+", "") -- remove whitespace
+  :gsub("%s+", "") -- remove whitespace
 
 local outfile = io.open("out.it", "w")
 outfile:write(code)
