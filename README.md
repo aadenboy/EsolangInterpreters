@@ -40,5 +40,7 @@ local flags = {
 }
 ```
 
+A rudimentary compiler for the programmer-friendly version of Iterate described at https://esolangs.org/wiki/Iterate/Compilation is also available as `IterateCompiler.lua`, taking an input program and outputting a compiled version as `out.it`.
+
 ## Crypten
 `Crypten.lua` is a basic runner. It simply takes the program to run as the first argument.
