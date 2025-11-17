@@ -27,7 +27,7 @@ repeat
     assert(name, "Expected filename")
     local ifile = io.open(name, "r")
     assert(ifile, "File "..name.." not found")
-    local contents = ifile:read("*a")
+    local contents = ifile:read("*a"):gsub("//[^\n]*", "")
     ifile:close()
     local prei = ii
     ii = ii + 5 + #name
@@ -48,7 +48,6 @@ repeat
     end
     if not noinclude then
       for macro, rest in contents:gmatch("%(%(([%w_]+)%*%)%)([%w_ ]+%b<>)") do
-        print(macro, rest)
         if not included[macro] then
           include = include.."(("..macro.."*))"..rest
         end
@@ -124,7 +123,8 @@ function expand(c, topprefix, args, previous)
       while true do
         local arg = c:sub(i):match("^%b<>")
         if not arg then break end
-        largs[macro.args[argi]] = arg:sub(2, -2):gsub("^%s*(.-)%s*$", "%1")
+        local argstr = arg:sub(2, -2):gsub("^%s*(.-)%s*$", "%1")
+        largs[macro.args[argi]] = expand(argstr, topprefix, args, previous)
         argi = argi + 1
         i = i + #arg
       end
