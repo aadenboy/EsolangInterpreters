@@ -58,9 +58,7 @@ repeat
   else
     ii = code:sub(ii):match("()%(%(%*%)%)") or #code+1
   end
-until ii > #code 
-print(code)
-os.exit() -- for testing
+until ii > #code
 
 local macros = {}
 local labels = {}
