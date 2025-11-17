@@ -20,6 +20,48 @@ function dump(thing, depth)
     return any and build:sub(1, -2).."\n"..prefix:sub(1, -2).."}" or "{}"
 end
 
+local ii = 1
+repeat
+  if code:sub(ii, ii+4) == "((*))" then
+    local name = code:sub(ii+5):match("^[^<>:\"/\\|%?%*\n]+")
+    assert(name, "Expected filename")
+    local ifile = io.open(name, "r")
+    assert(ifile, "File "..name.." not found")
+    local contents = ifile:read("*a")
+    ifile:close()
+    local prei = ii
+    ii = ii + 5 + #name
+    local include = ""
+    local included = {}
+    local noinclude = false
+    while true do
+      local macro, alias, after = code:sub(ii):match("^<%s*([%w_]+)%s*([%w_]*)%s*%>()")
+      if code:sub(ii):match("^%<%s*!%s*%>") then
+        noinclude = true
+        ii = ii + 2
+        break
+      end
+      if not macro then break end
+      include = include.."(("..alias.."*))"..contents:match("^%(%("..macro.."%*%)%)([%w_ ]+%b<>)")
+      included[macro] = true
+      ii = ii + after
+    end
+    if not noinclude then
+      for macro, rest in contents:gmatch("%(%(([%w_]+)%*%)%)([%w_ ]+%b<>)") do
+        print(macro, rest)
+        if not included[macro] then
+          include = include.."(("..macro.."*))"..rest
+        end
+      end
+    end
+    code = code:sub(1, prei-1)..include..code:sub(ii+1)
+  else
+    ii = code:sub(ii):match("()%(%(%*%)%)") or #code+1
+  end
+until ii > #code 
+print(code)
+os.exit() -- for testing
+
 local macros = {}
 local labels = {}
 local knownlabels = {}
@@ -47,10 +89,7 @@ function expandmacro(macro, prefix, args, previous)
   if previous[macro] then error("Recursion is not allowed. Found in "..macro.name) end
   previous[macro] = true
   code = macro.code
-    :gsub("?([%w_]+)", function(arg) -- replace args
-      if not args[arg] then error("Argument "..arg.." not found in macro "..macro.name) end
-      return args[arg]
-    end)
+    :gsub("%(([%w_]+)%(([%w_]+)%*", "(:%1(:%2*") -- preserve macros
     :gsub("([!&$=%(])([%w_]+)", function(c, l) -- prefix labels
       if knownlabels[l] then return c..l
       else return c..prefix..l end
@@ -58,6 +97,11 @@ function expandmacro(macro, prefix, args, previous)
     :gsub("n:([%w_]+)", function(l) -- prefix labels
       if knownlabels[l] then return "n:"..l
       else return "n:"..prefix..l end
+    end)
+    :gsub("%(:([%w_]+)%(:([%w_]+)%*", "(%1(%2*") -- restore macros
+    :gsub("?([%w_]+)", function(arg) -- replace args
+      if not args[arg] then error("Argument "..arg.." not found in macro "..macro.name) end
+      return args[arg]
     end)
   code = expand(code, prefix, args, previous)
   previous[macro] = nil
@@ -69,8 +113,9 @@ function expand(c, topprefix, args, previous)
   repeat
     local prefix, macro, after = c:sub(i):match("^%(([%w_]+)%(([%w_]+)%*%)%)()")
     if prefix and macro then
+      local macrostr = macro
       local macro = macros[macro]
-      if not macro then error("Macro "..macro.." not found") end
+      if not macro then error("Macro "..macrostr.." not found") end
       local prei = i
       i = i + after - 1
       local largs = {}
@@ -99,7 +144,7 @@ function expand(c, topprefix, args, previous)
 end
 
 code = expand(code, "", {}, {})
-
+---[[
 code = code
   :gsub("([!&$=%(])([%w_]+)", function(c, l) -- replace labels
     count = count + (labels[l] and 0 or 1)
@@ -112,7 +157,7 @@ code = code
     return "n"..labels[l]
   end)
   :gsub("%s+", "") -- remove whitespace
-
+--]]
 local outfile = io.open("out.it", "w")
 outfile:write(code)
 outfile:close()
