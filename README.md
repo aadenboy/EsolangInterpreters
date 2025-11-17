@@ -3,9 +3,9 @@ Public repository of the interpreters I've implemented for other esolangs, thoug
 ## Trampolines
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*TODO: Remake the interpreter, it's been two years.*
 
-Use `Trampolines.lua` for a dedicated CLI experience, with a visual debugger. The program will ask for a file when it runs. Arguments are hard-baked in.
+`interpreter.lua` will ask you for the file to interpret when ran. A visual debugger is included. Arguments are baked into the interpreter itself.
 
-Use `TrampolinesNoSTDIO.lua` for embedding. A visual debugger is not included. Pass the file and any additional arguments in order when running.
+Use `interpreterNoSTDIO.lua` for embedding. A visual debugger is not included. Pass the file and any additional arguments in order when running.
 
 ```lua
 --[[
@@ -18,7 +18,7 @@ pcnum   = false   -- boolean | print what's inputted after a custom prompt?
 ```
 
 ## Iterate
-`Iterate.lua` provides a dedicated CLI experience and supports embedding, alongside a visual debugger. The file is passed as the first non-flag argument. Optionally, an input file may be included. If none is provided, one will be emulated via prompting the user. If there is no file, add the `--emptyinput` flag. Additional flags may be added in any order.
+`interpreter.lua` interprets an Iterate program with an optional visual debugger. The file is passed as the first non-flag argument. Optionally, an input file may be included. If none is provided, one will be emulated via prompting the user. If there is no file, add the `--emptyinput` flag. Additional flags may be added in any order.
 
 ```lua
 local flags = {
@@ -40,7 +40,9 @@ local flags = {
 }
 ```
 
-A rudimentary compiler for the programmer-friendly version of Iterate described at https://esolangs.org/wiki/Iterate/Compilation is also available as `IterateCompiler.lua`, taking an input program and outputting a compiled version as `out.it`.
+A rudimentary compiler for the programmer-friendly version of Iterate described at https://esolangs.org/wiki/Iterate/Compilation is also available as `compiler.lua`, taking an input program and outputting a compiled version as `out.it`.
+
+`iterstring.lua` turns a string into a sequence of character prints, optimizing wherever possible, outputting to `out.it`.
 
 ## Crypten
-`Crypten.lua` is a basic runner. It simply takes the program to run as the first argument.
+`interpreter.lua` is a basic runner. It simply takes the program to run as the first argument.
