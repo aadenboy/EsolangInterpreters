@@ -133,7 +133,7 @@ function expand(c, topprefix, args, previous)
       i = prei + #out
     else
       local prei = i
-      i = c:sub(i):match("^.-()%([%w_]+%(")
+      i = c:sub(i):match("()%([%w_]+%(")
       if not i then break end
       i = prei + i - 1
     end
