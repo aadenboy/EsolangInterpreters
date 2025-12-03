@@ -42,6 +42,8 @@ local flags = {
 
 A rudimentary compiler for the programmer-friendly version of Iterate described at https://esolangs.org/wiki/Iterate/Compilation is also available as `compiler.lua`, taking an input program and outputting a compiled version as `out.it`.
 
+If the interpreter is too slow for your needs, `Ctranspiler.lua` (used alongside `boiler.c`) transpiles an Iterate program into a C program with exactly the same control flow and logic, taking an input program and output location.
+
 `iterstring.lua` turns a string into a sequence of character prints, optimizing wherever possible, outputting to `out.it`.
 
 ## Crypten
