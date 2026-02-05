@@ -32,10 +32,10 @@ local flags = {
   stickyloops = false, -- show the lines of the parent loops in debug mode, even if they are out of view
   hideunlabeled = false, -- hide the indexes of unlabeled loops in debug mode
   maxindexes = math.huge,     -- maximum number of indexes to show in debug mode
-  hideunvisited = false, -- hide the visits of unvisited loops in debug mode
   inputbytes = 10,      -- number of bytes to read from the input at a time in debug mode
   inputbytetype = "number", -- type of input bytes to show in debug mode (number, bits, hex, utf8)
   maxoutbytes = math.huge,     -- maximum number of bytes to show in the output in debug mode
+  hidegarbage = false, -- hide any accumulators not referenced by the program or other accumulators in debug mode
 }
 for i=1, #arg do
   local a = arg[i]
@@ -89,7 +89,7 @@ end
 code = code:gsub("%f[/]/%*.-%*/", "")
            :gsub("//[^\n]+", "")
            :gsub("∞", "i")
-           :gsub("[^ia[%di]%+%*<>&@%%\n]", "") -- \n to preserve line numbers
+           :gsub("[^ia[%di]%+%*<>&@#~%%\n]", "") -- \n to preserve line numbers
 
 local commands = {type = "loop", x = "", n = "1", parent = nil, parseline = 0}
 local current = commands
@@ -100,7 +100,7 @@ repeat
   local s = code:sub(i)
   if s:match("^\n") then line = line + 1 end
 
-  if s:match("^[%di]*%*a*[%di]+<") or s:match("^[%di]*%*i<") then
+  if s:match("^a*[%di]*%*a*[%di]+<") or s:match("^a*[%di]*%*i<") then
     assert(s:match("^a*[%di]*%*a*[%di]+%b<>") or s:match("a*[%di]*%*i%b<>"), "Unclosed loop at line "..line)
     local loop = {
       type = "loop",
@@ -123,9 +123,13 @@ repeat
     table.insert(current, {type = s:match("[&@]"), x = s:match("^a*[%di]+"), parseline = parseline})
     i = i + s:match("^a*[%di]+[&@]()")
     parseline = parseline + 1
-  elseif s:match("^%%a*[%di]+") then
-    table.insert(current, {type = "%", n = s:match("^%%(a*[%di]+)"), parseline = parseline})
-    i = i + s:match("^%%a*[%di]+()")
+  elseif s:match("^[%%#]a*[%di]+") then
+    table.insert(current, {type = s:match("[%%#]"), n = s:match("^[%%#](a*[%di]+)"), parseline = parseline})
+    i = i + s:match("^[%%#]a*[%di]+()")
+    parseline = parseline + 1
+  elseif s:match("^~") then
+    table.insert(current, {type = "~", parseline = parseline})
+    i = i + 1
     parseline = parseline + 1
   elseif s:match("^>") then
     if #current > 0 then parseline = parseline + 1 end
@@ -157,15 +161,21 @@ local out = ""
 local function indent(num, max)
   return (" "):rep(#tostring(max) - #tostring(num))..num
 end
-function progdump(loop, depth, from, to, sel, actloop)
+function progdump(loop, depth, from, to, sel, actloop, derefpointers, pointers)
+  derefpointers = derefpointers or {}
+  pointers = pointers or {}
   depth = depth or 0
   local build = ""
   if loop ~= commands then build = ("  "):rep(depth - 1)..loop.x.."*"..loop.n:gsub("i", "∞").."<"..(#loop > 0 and "\n" or "") end
   for _,v in ipairs(loop) do
+    if v.x and v.x:match("a") and v.type ~= "loop" then derefpointers[v.x] = "x" end
+    if v.n and v.n:match("aa") then derefpointers[v.n:sub(2)] = "v" end
+    if v.x and v.x:match("^[%di]+$") and v.type ~= "loop" then pointers[tonumber(v.x)] = true end
+    if v.n and v.n:match("^a[%di]+$") then pointers[tonumber(v.n:sub(2))] = true end
     if v.type ~= "loop" then
       build = build..("  "):rep(depth)..(v.x or "")..(v.type or "")..(v.n or "").."\n"
     else
-      build = build..progdump(v, depth + 1).."\n"
+      build = build..progdump(v, depth + 1, nil, nil, nil, nil, derefpointers).."\n"
     end
   end
   if loop ~= commands then build = build..("  "):rep(#loop > 0 and (depth - 1) or 0)..">" end
@@ -207,11 +217,56 @@ function progdump(loop, depth, from, to, sel, actloop)
   end
 
   finalout = finalout..("─"):rep(6 + #tostring(to) + maxwidth).."\nAccumulators:\n"
-  for i,v in pairs(accumulators) do
-    finalout = finalout..indent("a"..i, "a"..#accumulators).." = "..v.."; "
-    if i % 5 == 0 then finalout = finalout.."\n" end
+  local maxacc = 0
+  local maxval = 0
+  local markval = {}
+  local referenced = {}
+  local rows = {}
+  for i in pairs(pointers) do
+    referenced[i] = true
+    maxacc = math.max(maxacc, i)
+    maxval = math.max(maxval, accumulators[i] or 0)
   end
-
+  for i,v in pairs(accumulators) do
+    maxacc = math.max(maxacc, i)
+    maxval = math.max(maxval, v)
+  end
+  for i in pairs(derefpointers) do
+    local acc = parseamount(i)
+    local mark = parseamount(i:sub(2))
+    markval[mark] = accumulators[acc] or 0
+    referenced[acc] = true
+    maxacc = math.max(maxacc, acc)
+    maxval = math.max(maxval, accumulators[acc] or 0)
+  end
+  local maxrow = 0
+  for i=0, maxacc do
+    local row = math.floor(i / 10)
+    local pos = i % 10
+    rows[row] = rows[row] or {}
+    if not flags.hidegarbage or markval[i] or referenced[i] or pointers[tostring(i)] then
+      maxrow = math.max(maxrow, row)
+      rows[row][pos] = string.format("%0"..#tostring(maxval).."d", accumulators[i] or 0)
+      rows[row].has = true
+      if markval[i] then
+        rows[row][pos] = rows[row][pos]..string.format("→%0"..#tostring(maxval).."d", markval[i])
+      else
+        rows[row][pos] = rows[row][pos]..(" "):rep(#tostring(maxval) + 1)
+      end
+    end
+  end
+  for i=0, maxrow do
+    local v = rows[i]
+    if v and v.has then
+      finalout = finalout..indent(i*10, maxrow*10).." │ "
+      for j=0, 9 do
+        if v[j] then finalout = finalout..v[j].." "
+        else finalout = finalout..(" "):rep(#tostring(maxval) * 2 + 2) end
+      end
+      finalout = finalout.."\n"
+    end
+  end
+  
   finalout = finalout.."\n"..("─"):rep(6 + #tostring(to) + maxwidth).."\nInput:\n"
   for i=inputbit, math.min(inputbit+flags.inputbytes-1, #input) do
     local c = input:byte(i)
@@ -236,7 +291,7 @@ function progdump(loop, depth, from, to, sel, actloop)
 end
   
 function rcsearch(from, tag)
-  if parseamount(from.x) == parseamount(tag) then return from end
+  if from.x ~= "" and parseamount(from.x) == parseamount(tag) then return from end
   if from == commands then return nil end
   return rcsearch(from.parent, tag)
 end
@@ -262,9 +317,10 @@ function run(loop)
         elseif v.type == "&" then
           local get = rcsearch(loop, v.x)
           if get then
-            loop.cur = 0
             retvalue = function(l) return l == get and "break" or true end
-            doreturn = true
+            if get == loop then dobreak = true
+            else doreturn = true end
+            if doreturn then loop.cur = 0 end
           end
         elseif v.type == "@" then -- one byte
           ioprompt()
@@ -274,6 +330,12 @@ function run(loop)
           local value = parseamount(v.n)
           if flags.debug then out = out..string.char(value % 256)
           else io.write(string.char(value % 256)) end
+        elseif v.type == "#" then
+          local value = parseamount(v.n)
+          if flags.debug then out = out..value
+          else io.write(tostring(value)) end
+        elseif v.type == "~" then
+          flags.debug = not flags.debug
         end
         if flags.debug then
           print(progdump(commands, 0, v.parseline - flags.linesup, v.parseline + flags.linesdown, v.parseline, loop))
