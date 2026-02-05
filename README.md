@@ -47,7 +47,7 @@ If the interpreter is too slow for your needs, `Ctranspiler.lua` (used alongside
 `iterstring.lua` turns a string into a sequence of character prints, optimizing wherever possible, outputting to `out.it`.
 
 ## Countable
-`interpreter.lua` interprets an Iterate program with an optional visual debugger. The file is passed as the first non-flag argument. Optionally, an input file may be included. If none is provided, one will be emulated via prompting the user. If there is no file, add the `--emptyinput` flag. Additional flags may be added in any order.
+`interpreter.lua` interprets an Countable program with an optional visual debugger. The file is passed as the first non-flag argument. Optionally, an input file may be included. If none is provided, one will be emulated via prompting the user. If there is no file, add the `--emptyinput` flag. Additional flags may be added in any order.
 
 ```lua
 local flags = {
