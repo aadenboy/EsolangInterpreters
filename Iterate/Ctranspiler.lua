@@ -1,11 +1,34 @@
+local gargs = {}
+local flags = {
+    dump = false,          -- dump the parsed program expanded to the console
+    parserdump = false,    -- dump the parsed program as a lua table to the console
+    verbose = false,       -- prevent simplifying algebraic constructs (see Iterate/Loop algebra)
+    debugsimplify = false, -- debug the simplification process
+}
+for i=1, #arg do
+    local a = arg[i]
+    if a:match("^%-%-[^=]+=%-?%d*%.?%d+") then
+        local name, value = a:match("^%-%-(.-)=(%-?%d*%.?%d+)")
+        if type(flags[name]) == "number" then flags[name] = tonumber(value) or flags[name] end
+    elseif a:match("^%-%-[^=]+=") then
+        local name, value = a:match("^%-%-(.-)=(.+)")
+        if type(flags[name]) == "string" then flags[name] = value end
+    elseif a:sub(1, 2) == "--" and #a > 2 and type(flags[a:sub(3)]) == "boolean" then
+        flags[a:sub(3)] = true
+    else
+        table.insert(gargs, a)
+    end
+end
+
 assert(arg[1], "No program specified")
-local program = arg[1]
+local program = gargs[1]
 local file = io.open(program, "r")
 assert(file, "Could not open file "..program)
 local code = file:read("*a")
 file:close()
-local out = arg[2]
+local out = gargs[2] or program:gsub("%.it", ".c")
 
+local load = loadstring or load
 function toutf8(cp) -- for lua 5.1+ https://stackoverflow.com/a/26237757
   if cp < 128 then
     return string.char(cp)
@@ -45,10 +68,15 @@ local function dump(thing, depth, seen)
   return any and build:sub(1, -2).."\n"..prefix:sub(1, -2).."}" or "{}"
 end
 
+local prints = {}
 code = code:gsub("%f[/]/%*.-%*/", "")
          :gsub("//[^\n]+", "")
          :gsub("∞", "i")
-         :gsub("[^()<>*0-9~ni=?%^!@&%%%$\n]", "") -- \n to preserve line numbers
+         :gsub("%b{}", function(s)
+             table.insert(prints, s:sub(2, -2))
+             return "|"..#prints
+         end)
+         :gsub("[^()<>*0-9~ni=?%^!@&%%%$|\n]", "") -- \n to preserve line numbers
 
 local loops = {}
 local current = {}
@@ -166,6 +194,15 @@ repeat
       table.insert(current.commands, command)
       i = i + 1 + #command.param
       parseline = parseline + 1
+    elseif s:match("^|") then
+        local command = {
+            type = "|",
+            param = prints[tonumber(s:match("^|(%d+)"))],
+            line = line,
+            parseline = parseline
+        }
+        table.insert(current.commands, command)
+        i = i + s:match("^|%d+()") - 1
     elseif s:match("^>") then
       if #current.commands > 0 then parseline = parseline + 1 end
       current = current.parent
@@ -177,6 +214,119 @@ until i >= #code
 
 current = loops[1]
 if not current or current.label ~= "^" then return end
+
+function issimple(n, eq)
+    return
+        n == "" or
+        tonumber(n) or
+        (n:match("%?") and #eq == 0) or
+        n:match("n") or
+        n:match("=.+")
+end
+function choose(n, i, k)
+    if not tonumber(n) then
+        local out = n
+        local f, x = 1, 1
+        for j=-k+1+i, i do
+            out = out..(j == 0 and "" or "*("..n..(j < 0 and "-"..-j or "+"..j)..")")
+            f = f * x
+            x = x + 1
+        end
+        return out.."/"..f
+    else
+        local cur = 1
+        local f, x = 1, 1
+        for j=-k+1+i, i do
+            cur = cur * (n + j)
+            f = f * x
+            x = x + 1
+        end
+        return cur/f
+    end
+end
+function copy(t)
+    if type(t) ~= "table" then return t end
+    local out = {}
+    for i,v in pairs(t) do
+        out[i] = copy(v)
+    end
+    return out
+end
+function simplify(loop)
+    local increments = {}
+    local encountered = {seen = {}, used = {}}
+    local simple = true
+    local function check(loop, eq)
+        if loop.label ~= "" then
+            encountered.seen[loop.label] = true
+            table.insert(increments, {label = loop.label, amount = eq})
+        end
+        if loop.amount:match("=.+") or loop.amount:match("n.+") then
+            encountered.used[loop.amount:match("[=n](.+)")] = true
+        end
+        if issimple(loop.amount, eq) then
+            local hit = {}
+            local broken = false
+            for _,v in ipairs(loop.commands) do
+                if v.type and v.type ~= "!" then simple = v.type.." is complex" return end
+                if v.type == "!" and v.param then simple = "! with param is complex" return end
+                if v.type == "!" then broken = true break end
+                table.insert(hit, v)
+            end
+            local neq = copy(eq)
+            if loop.amount:match("n$") and not broken and #neq > 0 then
+                local cur = neq[#neq]
+                if cur.broken then
+                    neq[#neq] = {type = "const", amount = loop.amount == "~n" and "("..cur.broken.."-!!"..cur.broken..")" or 1, broken = not loop.amount == "~n"}
+                else
+                    neq[#neq] = {type = "binom", amount = cur.amount, i = (cur.i or 0) + (loop.amount:match("~") and 0 or 1), k = (cur.k or 1) + 1}
+                end
+            else table.insert(neq, {type = "const", amount = broken and 1 or loop.amount, broken = broken and loop.amount}) end
+            for _,v in ipairs(hit) do
+                check(v, neq)
+            end
+        else
+            simple = loop.amount.." is complex"
+        end
+    end
+    check(loop, {})
+    for i in pairs(encountered.seen) do
+        if encountered.used[i] then simple = i.." is both seen and used" break end
+    end
+    if simple == true then
+        loop.simplified = {} 
+        for _,v in ipairs(increments) do
+            local final = ""
+            local pre
+            for _,b in ipairs(v.amount) do
+                if not b.broken and b.type == "const" then
+                    if b.amount:match("%?.+%?") then
+                        pre = b.amount:match("[~%%]?%?")
+                        b.amount = b.amount:gsub("[~%%]?%?", "$1")
+                    end
+                    final = final..b.amount.."*"
+                elseif not b.broken then
+                    if b.amount:match("%?") then
+                        pre = b.amount
+                        b.amount = "$1"
+                    end
+                    final = final..choose(b.amount, b.i, b.k).."*"
+                elseif b.broken and b.broken:match("[n=].+") then
+                    final = final.."!!"..b.broken.."*"
+                end
+            end
+            if final == "" then final = "1*" end
+            table.insert(loop.simplified, {label = v.label, amount = final:sub(1, -2), pre = pre})
+            if flags.debugsimplify then print(v.label, final:sub(1, -2), pre) end
+        end
+    else
+        if flags.debugsimplify then print(simple) end
+        for _,v in ipairs(loop.commands) do
+            if not v.type then simplify(v) end
+        end
+    end
+end
+if not flags.verbose then simplify(current) end
 
 local boiler = io.open("boiler.c", "r")
 assert(boiler, "Could not open boilerplate file boiler.c")
@@ -190,6 +340,37 @@ local jumps = {} -- disambiguation
 -- I<index> for indices, R<index> for remaining loops, V<index> for visits
 -- B<index> for break flags, C<index> for continue flags (if past loop boundaries)
 -- u<index> for unique loop identifiers
+function tovalue(loop, amount)
+    amount = amount or loop.amount
+        if not amount              then return "0"
+    elseif amount == ""            then return "0"
+    elseif tonumber(amount)        then return "(uint64_t) "..amount
+    elseif amount == "i"           then return "18446744073709551615ULL"
+    elseif amount == "?"           then return "readnum()"
+    elseif amount == "~?"          then return "readutf8()"
+    elseif amount == "%?"          then return "(uint64_t)pop()"
+    elseif amount == "n"           then return loop.parent.label and "I"..vars[loop.parent] or "0"
+    elseif amount:match("^n%d+$")  then return "I"..amount:match("^n(%d+)")
+    elseif amount == "n^"          then return "Itop"
+    elseif amount == "~n"          then return loop.parent.label and "R"..vars[loop.parent] or "0"
+    elseif amount:match("^~n%d+$") then return "R"..amount:match("^~n(%d+)")
+    elseif amount == "~n^"         then return "Rtop"
+    elseif amount == "="           then return loop.parent.label and "V"..vars[loop.parent] or "0"
+    elseif amount:match("^=%d+$")  then return "V"..amount:match("^=(%d+)")
+    elseif amount == "=^"          then return "Vtop" end
+end
+local pi = 0
+function simpletraverse(loop, indent)
+    for _,v in ipairs(loop.simplified) do
+        if v.pre then
+            cfile = cfile..indent.."uint64_t P"..pi.." = "..tovalue(loop, v.pre)..";\n"
+            v.amount = v.amount:gsub("%$1", "P"..pi)
+            pi = pi + 1
+        end
+        local namount = v.amount:gsub("[^%+%-%*/%(%)!]+", function(a) return tovalue(loop, a) end)
+        cfile = cfile..indent.."V"..v.label.." += "..namount..";\n"
+    end
+end
 function traverse(loop, indent)
     vars[loop] = "u"..li
     local i = "u"..li
@@ -197,22 +378,7 @@ function traverse(loop, indent)
     jumps[loop.label] = (jumps[loop.label] or 0) + 1
     li = li + 1
     indent = indent or "  "
-    local amount = ""
-        if loop.amount == ""            then amount = "0"
-    elseif tonumber(loop.amount)        then amount = "(uint64_t) "..loop.amount
-    elseif loop.amount == "i"           then amount = "18446744073709551615ULL"
-    elseif loop.amount == "?"           then amount = "readnum()"
-    elseif loop.amount == "~?"          then amount = "readutf8()"
-    elseif loop.amount == "%?"          then amount = "(uint64_t)pop()"
-    elseif loop.amount == "n"           then amount = loop.parent.label and "I"..vars[loop.parent] or "0"
-    elseif loop.amount:match("^n%d+$")  then amount = "I"..loop.amount:match("^n(%d+)")
-    elseif loop.amount == "n^"          then amount = "Itop"
-    elseif loop.amount == "~n"          then amount = loop.parent.label and "R"..vars[loop.parent] or "0"
-    elseif loop.amount:match("^~n%d+$") then amount = "R"..loop.amount:match("^~n(%d+)")
-    elseif loop.amount == "~n^"         then amount = "Rtop"
-    elseif loop.amount == "="           then amount = loop.parent.label and "V"..vars[loop.parent] or "0"
-    elseif loop.amount:match("^=%d+$")  then amount = "V"..loop.amount:match("^=(%d+)")
-    elseif loop.amount == "=^"          then amount = "Vtop" end
+    local amount = tovalue(loop)
     if loop.label ~= "" then cfile = cfile..indent.."V"..loop.label.."++;\n" end
     cfile = cfile..indent.."V"..i.."++;\n"
     if amount == "0" or #loop.commands == 0 then return end
@@ -237,7 +403,21 @@ function traverse(loop, indent)
             elseif v.type == "%@"                   then cfile = cfile..indent.."putchar(I"..i.." & 0xFF);\n"
             elseif v.type == "$" and not v.param    then cfile = cfile..indent.."V"..i.." = 0 ;\n"
             elseif v.type == "$" and v.param ~= "^" then cfile = cfile..indent.."V"..v.param.." = 0 ;\n"
-            elseif v.type == "$" and v.param == "^" then cfile = cfile..indent.."Vtop = 0 ;\n" end
+            elseif v.type == "$" and v.param == "^" then cfile = cfile..indent.."Vtop = 0 ;\n"
+            elseif v.type == "|"                    then
+                local args = {}
+                local inner = v.param
+                    :gsub("%$(.-)%$", function(s)
+                        if not tovalue(loop, s) then return "$"..s.."$"
+                        else
+                            table.insert(args, tovalue(loop, s))
+                            return "%\"PRIu64\""
+                        end
+                    end)
+                cfile = cfile..indent.."printf(\""..inner.."\""..(#args > 0 and ", "..table.concat(args, ", ") or "")..");\n"
+            end
+        elseif v.simplified then
+            simpletraverse(v, indent)
         else
             traverse(v, indent)
         end
@@ -255,23 +435,26 @@ for i=0, li do
     cfile = "uint64_t Vu"..i.." = 0;\n"..cfile
 end
 cfile = cfile.."}\n"
-cfile = cfile:gsub("(%s*)([BC][%d%l]+_%d+):", function(s, l)
+
+-- getting rid of unused stuff
+cfile = cfile:gsub("(%s*)([BC][%d%l]+_%d+):", function(s, l) -- labels
     if cfile:match("goto "..l) then
         return s..l..":"
     else return "" end
 end)
-cfile = cfile:gsub("(%s*)uint64_t (%S+) = (.-);", function(s, l, v)
-    if l:match("[AI]u%d+") or cfile:match("Au%d+ = "..l) or cfile:match(l.." = 0 ;") then
+cfile = cfile:gsub("(%s*)uint64_t (%S+) = (.-);", function(s, l, v) -- variables
+    if l:match("[AI]u%d+") or cfile:match("Au%d+ = "..l) or cfile:match(l.." = 0 ;") or cfile:match("%+=[^;]*"..l.."[^;]*;") then
         return s.."uint64_t "..l.." = "..v..";"
     else return "" end
 end)
-cfile = cfile:gsub("(%s*)(V[%d%l]+)%+%+;", function(s, l)
+cfile = cfile:gsub("(%s*)(V[%d%l]+)(%s*%+[%+=])(.-);", function(s, l, o, n) -- visits
     if cfile:match(l.." = 0;") then
-        return s..l.."++;"
+        return s..l..o..n..";"
     else return "" end
 end):gsub("= 0 ;", "= 0;")
-print(cfile)
-if not arg[2] then return end
+cfile = cfile:gsub(" %+= %(uint64_t%) 1;", "++;") -- jankery
+if not arg[2] then print(cfile) return end
 local outfile = io.open(arg[2], "w")
+assert(outfile, "Could not open output file "..arg[2])
 outfile:write((boilerplate:gsub("//%$PROGRAM%$//", function() return cfile end)))
 outfile:close()
