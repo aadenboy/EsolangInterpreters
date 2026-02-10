@@ -5,6 +5,8 @@ assert(file, "File not found")
 local code = file:read("*a")
 file:close()
 
+code = code:gsub("//[^\n]*", "")
+
 function dump(thing, depth)
     if type(thing) ~= "table" then return type(thing) == "string" and "\""..thing.."\"" or tostring(thing) end
     depth = depth or 1
@@ -47,13 +49,14 @@ repeat
       ii = ii + after
     end
     if not noinclude then
-      for macro, rest in contents:gmatch("%(%(([%w_]+)%*%)%)([%w_ ]+%b<>)") do
+      for macro, rest in contents:gmatch("%(%(([%w_]+)%*%)%)([%w_ ]*%b<>)") do
         if not included[macro] then
           include = include.."(("..macro.."*))"..rest
         end
       end
     end
     code = code:sub(1, prei-1)..include..code:sub(ii+1)
+    ii = prei + #include
   else
     ii = code:sub(ii):match("()%(%(%*%)%)") or #code+1
   end
@@ -63,9 +66,15 @@ local macros = {}
 local labels = {}
 local knownlabels = {}
 local count = 0
+local prints = {}
 code = code
+  :gsub("%f[/]/%*.-%*/", "")
   :gsub("//[^\n]*", "") -- remove comments
-  :gsub("%(%(([%w_]+)%*%)%)([%w_ ]+)(%b<>)", function(name, arglist, inner) -- store macros
+  :gsub("%b{}", function(s)
+    table.insert(prints, s)
+    return "|"..#prints
+  end)
+  :gsub("%(%(([%w_]+)%*%)%)([%w_ ]*)(%b<>)", function(name, arglist, inner) -- store macros
     local args = {}
     for arg in arglist:gmatch("([%w_]+)") do
       table.insert(args, arg)
@@ -87,18 +96,17 @@ function expandmacro(macro, prefix, args, previous)
   previous[macro] = true
   code = macro.code
     :gsub("%(([%w_]+)%(([%w_]+)%*", "(:%1(:%2*") -- preserve macros
-    :gsub("([!&$=%(])([%w_]+)", function(c, l) -- prefix labels
-      if knownlabels[l] then return c..l
-      else return c..prefix..l end
-    end)
-    :gsub("n:([%w_]+)", function(l) -- prefix labels
-      if knownlabels[l] then return "n:"..l
-      else return "n:"..prefix..l end
-    end)
+    :gsub("([!&$=%(])([%w_]+)", "%1"..prefix.."%2")
+    :gsub("n:([%w_]+)", "n:"..prefix.."%1")
     :gsub("%(:([%w_]+)%(:([%w_]+)%*", "(%1(%2*") -- restore macros
+    :gsub("|(%d+)", function(i) return prints[tonumber(i)] end) -- restore prints
     :gsub("?([%w_]+)", function(arg) -- replace args
       if not args[arg] then error("Argument "..arg.." not found in macro "..macro.name) end
       return args[arg]
+    end)
+    :gsub("%b{}", function(s) -- store prints
+      table.insert(prints, s)
+      return "|"..#prints
     end)
   code = expand(code, prefix, args, previous)
   previous[macro] = nil
@@ -155,7 +163,20 @@ code = code
     return "n"..labels[l]
   end)
   :gsub("%s+", "") -- remove whitespace
+  :gsub("|(%d+)", function(i)
+    return prints[tonumber(i)]
+      :gsub("%$([!&$=%(])([%w_]+)%$", function(c, l) -- replace labels
+        count = count + (labels[l] and 0 or 1)
+        labels[l] = labels[l] or count
+        return "$"..c..labels[l].."$"
+      end)
+      :gsub("%$n:([%w_]+)%$", function(l) -- replace labels
+        count = count + (labels[l] and 0 or 1)
+        labels[l] = labels[l] or count
+        return "$n"..labels[l].."$"
+      end)
+  end) -- restore prints
 --]]
-local outfile = io.open("out.it", "w")
+local outfile = io.open(arg[1]:gsub("%.it", "_c.it"), "w")
 outfile:write(code)
 outfile:close()
