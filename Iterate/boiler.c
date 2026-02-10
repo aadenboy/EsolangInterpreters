@@ -5,8 +5,6 @@
 #include <stdint.h>
 #include <inttypes.h>
 
-// NOTE: boilerplate necessary to emulate Iterate I/O specifications
-
 bool usefile = false;
 bool doneinput = false;
 FILE *infile = NULL;
@@ -32,6 +30,8 @@ void prompt() { // arbitrary length
         input[len++] = c;
     }
     input[len] = '\0';
+    //printf("input[0] %c prompted\n", input[0]);
+    if (input[0] == '\0') doneinput = true;
 }
 char pop() {
     if (usefile && doneinput) return '\0';
@@ -42,6 +42,7 @@ char pop() {
             return '\0';
         } else return out;
     } else {
+        //printf("input[0] %c %s\n", input[0], doneinput ? "done" : "ongoing");
         if (input[0] == '\0' && doneinput) prompt();
         else if (input[0] == '\0') { doneinput = true; return '\0'; }
         //if (input[0] == '\0') return '\0';
@@ -54,6 +55,7 @@ char pop() {
 void unpop() {
     if (usefile) fseek(infile, -1, SEEK_CUR);
     else {
+        //printf("unpopping %c\n", buffer);
         if (buffer == '\0') return;
         memmove(input + 1, input, strlen(input) + 1);
         input[0] = buffer;
@@ -65,22 +67,29 @@ uint64_t readnum() {
     uint64_t num = 0;
     if (usefile && doneinput) return 0;
     bool foundnum = false;
+    //printf("reading num\n");
     while (true) {
         char c = pop();
-        if (c == '\0') return num;
+        if (c == '\0') {
+            //printf("read num %" PRIu64 "\n", num);
+            return num;
+        }
         if (c >= '0' && c <= '9') {
             num = num * 10 + c - '0';
             foundnum = true;
         } else if (foundnum) {
             unpop();
+            //printf("read num %" PRIu64 "\n", num);
             return num;
         }
     }
 }
 uint64_t readutf8() {
+    //printf("reading utf8\n");
     if (usefile && doneinput) return '\0';
     char initial = pop();
     int bytes = 0;
+    //printf("initial %c\n", initial);
     if (initial >> 6 == 0x2) return '\0'; // invalid utf-8
     else if (initial < 0x80) return initial;
     else if (initial < 0xE0) bytes = 1;
@@ -88,11 +97,13 @@ uint64_t readutf8() {
     else if (initial < 0xF8) bytes = 3;
     uint64_t num = initial & ((1 << (7 - bytes)) - 1);
     bool valid = true;
+    //printf("reading utf8 %d bytes\n", bytes);
     for (int i = 0; i < bytes; i++) {
         char c = pop();
         if (c >> 6 != 0x2) valid = false; // invalid utf-8
         num = (num << 6) | (c & 0x3F);
     }
+    //printf("read utf8 %" PRIu64 "\n", num);
     if (!valid) return 0;
     return num;
 }
@@ -129,7 +140,15 @@ void oututf8(uint64_t num) {
 
 //$PROGRAM$//
 
-int main(void) {
+int main(int argc, char **argv) {
+    if (argc > 1) {
+        usefile = true;
+        infile = fopen(argv[1], "r");
+        if (infile == NULL) {
+            fprintf(stderr, "Error: Could not open file %s\n", argv[1]);
+            exit(1);
+        }
+    }
     input = malloc(1);
     input[0] = '\0';
     if (!usefile) doneinput = true;
