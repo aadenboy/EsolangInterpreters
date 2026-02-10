@@ -44,7 +44,7 @@ A rudimentary compiler for the programmer-friendly version of Iterate described 
 
 If the interpreter is too slow for your needs, `Ctranspiler.lua` (used alongside `boiler.c`) transpiles an Iterate program into a C program with exactly the same control flow and logic, taking an input program and output location. The transpiler will also simplify [several arithmetic constructs](https://esolangs.org/wiki/Iterate/Loop_algebra) into a single `+=` operator to significantly speed up execution (you can disable this with `--verbose`).
 
-```
+```lua
 local flags = {
     dump = false,          -- dump the parsed program expanded to the console
     parserdump = false,    -- dump the parsed program as a lua table to the console
