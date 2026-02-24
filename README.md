@@ -85,3 +85,6 @@ For debugging purposes, you may use the `#` command to print a number literally,
 
 ## Crypten
 `interpreter.lua` is a basic runner. It simply takes the program to run as the first argument.
+
+## ((()))(((())))=5
+`interpreter.lua` is a basic runner. It simply takes the program to run as the first argument. All reductions and the final form are printed. Definitions in the form of `X=Y` are supported.
