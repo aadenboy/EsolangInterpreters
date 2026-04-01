@@ -91,3 +91,6 @@ For debugging purposes, you may use the `#` command to print a number literally,
 
 ## ToFunction
 `interpreter.lua` is a basic runner. It simply takes the program to run as the first argument. Press enter to advance by one step.
+
+## Mhm!
+`interpreter.lua` is a basic runner. It simply takes the program to run as the first argument. Press enter to advance by one step.
