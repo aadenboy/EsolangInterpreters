@@ -48,18 +48,18 @@ local dindexes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 function debug(m, pre, indent)
   indent = indent or ""
   local s = ""
-  local min = 0
+  local max = 0
   local maxn = 1
   for i,v in pairs(m) do
     if type(i) == "number" then
-      min = math.min(min, i)
+      max = math.max(max, i)
       if #tostring(v.pointer) > maxn then maxn = #tostring(v.pointer) end
     end
   end
-  s = s..indent..pre.." "..(" "):rep(4 + maxn):rep(m.pointer - min)..("v"):rep(3 + maxn).."\n"..indent..pre.." "
+  s = s..indent..pre.." "..(" "):rep(4 + maxn):rep(m.pointer)..("v"):rep(3 + maxn).."\n"..indent..pre.." "
   local afters = ""
-  for i=min, 0 do
-    local index = dindexes:sub(1-i, 1-i)
+  for i=0, max do
+    local index = dindexes:sub(i+1, i+1)
     local value = m[i] and (m[i].unusable and "X" or m[i].pointer) or 0
     local pad = (" "):rep(maxn - #tostring(value))
     s = s..index.."["..pad..value.."] "
@@ -86,18 +86,18 @@ function run(command)
   previouscommand = ("^"):rep(command.nestings)..command.type
   print(debug(memory, ""))
   io.read()
-  if command.type == "(" then
+  if command.type == ")" then
     local m = traverse(command.nestings)
-    if m then m.pointer = m.pointer - 1 end
+    if m then m.pointer = m.pointer + 1 end
     traverse(command.nestings + 1)
-  elseif command.type == ")" then
+  elseif command.type == "(" then
     local m = traverse(command.nestings)
     if m then
       repeat
-        m.pointer = m.pointer + 1
+        m.pointer = m.pointer - 1
         local newm = traverse(command.nestings + 1)
-      until m.pointer > 0 or not newm or newm.pointer > m.pointer
-      if m.pointer > 0 then m.unusable = true end
+      until m.pointer < 0 or not newm or newm.pointer <= m.pointer
+      if m.pointer < 0 then m.unusable = true end
     end
   elseif command.type == "[]" then
     local m = traverse(command.nestings + 1)
