@@ -93,4 +93,15 @@ For debugging purposes, you may use the `#` command to print a number literally,
 `interpreter.lua` is a basic runner. It simply takes the program to run as the first argument. Press enter to advance by one step.
 
 ## Mhm!
-`interpreter.lua` is a basic runner. It simply takes the program to run as the first argument. Press enter to advance by one step.
+`interpreter.lua` is an interactive runner. Press enter to advance by one step.
+
+```lua
+local flags = {
+    dump = false,         -- dump the parsed program expanded to the console and exit
+    parserdump = false,   -- dump the parsed program as a lua table to the console and exit
+    maxdepth = math.huge, -- maximum depth to show
+    direct = false,       -- only show the currently selected branch
+    show = ".+",          -- regex of which branches to show (overrides maxdepth and direct)
+    showloose = ".+",     -- same as show but doesn't preserve entire branch
+}
+```
