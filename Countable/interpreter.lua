@@ -324,7 +324,8 @@ function run(loop)
           end
         elseif v.type == "@" then -- one byte
           ioprompt()
-          accumulators[parseamount(v.x)] = accumulators[parseamount(v.x)] + input:byte(inputbit)
+          local target, increment = parseamount(v.x), input:byte(inputbit)
+          accumulators[target] = (accumulators[target] or 0) + increment
           inputbit = inputbit + 1
         elseif v.type == "%" then
           local value = parseamount(v.n)
