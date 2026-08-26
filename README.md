@@ -105,3 +105,16 @@ local flags = {
     showloose = ".+",     -- same as show but doesn't preserve entire branch
 }
 ```
+
+## Flowchart
+`interpreter.lua` interprets a Flowchart program with an optional visual debugger. The file is passed as the first non-flag argument. Optionally, an input file may be included. If none is provided, one will be emulated via prompting the user. If there is no file, add the `--emptyinput` flag. Additional flags may be added in any order.
+
+```lua
+local flags = {
+    debug = false,      -- visually show the pointers moving through the program
+    binary = false,     -- treat I/O as bits (characters 0/1) instead of bytes
+    emptyinput = false, -- mark input as being empty
+}
+```
+
+Note that program validity is only evaluated during runtime.
