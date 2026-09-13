@@ -118,3 +118,6 @@ local flags = {
 ```
 
 Note that program validity is only evaluated during runtime.
+
+## Hopscotch
+`parse.lua` takes a Hopscotch project and converts an object in the project to MediaWiki templates. Custom abilities, rules, and all object variables are not yet supported.
