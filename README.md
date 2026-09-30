@@ -141,3 +141,13 @@ local flags = {
 Note that this makes two assumptions:
 * Pointers evaluate their command first before moving.
 * The `|` and `-` commands immediately move the added pointer in its new direction.
+
+## GolferNightmare
+`interpreter.lua` interprets a GolferNightmare program. The file is passed as the first non-flag argument. Optionally, an input file may be included. If none is provided, one will be emulated via prompting the user. If there is no file, add the `--emptyinput` flag. Additional flags may be added in any order.
+
+```lua
+local flags = {
+    debug = false,      -- visually show the program
+    emptyinput = false  -- mark input as being empty
+}
+```
