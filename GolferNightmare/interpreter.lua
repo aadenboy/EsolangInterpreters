@@ -21,6 +21,7 @@ end
 local file = io.open(gargs[1], "r")
 assert(file, "No file "..gargs[1])
 local program = file:read("*a")
+file:close()
 
 local tape = {[0] = 0}
 local p = 0
