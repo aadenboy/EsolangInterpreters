@@ -56,8 +56,8 @@ function debug()
     s = s.."\n== Output ==\n"..output:sub(-50, -1).."\n"
     s2 = ""
     for i=math.max(#output-49, 1), #output do
-        s = s..string.format("%03d ", input:byte(i))
-        s2 = s2..string.format("%02x ", input:byte(i))
+        s = s..string.format("%03d ", output:byte(i))
+        s2 = s2..string.format("%02x ", output:byte(i))
     end
     s = s.."\n"..s2
     print("\x1B[H\x1B[2J"..s)
@@ -65,7 +65,7 @@ function debug()
 end
 
 while true do
-    debug()
+    if flags.debug then debug() end
     local c = program:sub(i, i)
     if c == ">" then
         p = p + 1
@@ -83,8 +83,9 @@ while true do
         tape[p] = tape[p] + input:byte(1)
         input = input:sub(2)
     elseif c == "." and not iob then
-        output = output..string.byte(tape[p] % 256)
-        io.write(string.byte(tape[p] % 256))
+        output = output..string.char(tape[p] % 256)
+        io.write(string.char(tape[p] % 256))
     end
     i = (i % #program) + 1
 end
+if flags.debug then debug() end
